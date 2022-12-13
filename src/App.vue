@@ -1,26 +1,140 @@
 <template>
-  <img alt="Vue logo" src="./assets/logo.png">
-  <HelloWorld msg="Welcome to Your Vue.js App"/>
+  <div class="flex w-screen h-screen text-gray-700">
+    <div class="flex flex-col flex-shrink-0 w-64 border-r border-gray-300 bg-gray-100">
+      <!-- Sidebar -->
+      <div class="h-0 overflow-auto flex-grow">
+        <div class="mt-4">
+          <a class="flex items-center h-8 text-sm pl-8 pr-3" 
+          href="#" 
+          v-for="note in notes" 
+          :key="note.created">
+
+          <span class="ml-2 leading-none">{{ new Date(note.created).toLocaleDateString()}} </span>
+          </a>
+        </div>
+      </div>
+      
+    </div>
+
+    <div class="flex flex-col flex-grow">
+      <!-- Main content -->
+
+      <div class="flex flex-col flex-grow overflow-auto">
+        <editor-content :editor="editor" />
+      </div>
+      <div class="h-16 bg-gray-100 border-t border-gray-300 text-right">
+        <button @click="saveNote">Save Note</button>
+      </div>
+    
+    </div>
+  </div>
+  
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
+import { Editor, EditorContent } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+
 
 export default {
   name: 'App',
+
   components: {
-    HelloWorld
+    EditorContent,
+  },
+
+  data() {
+    return {
+      editor: null,
+      database: null,
+      notes: []
+    }
+  },
+
+  async created() {
+    this.database = await this.getDatabase();
+    const notes = await this.getNotes();
+    this.notes = notes.reverse();
+  },
+
+  mounted() {
+    this.editor = new Editor({
+      content: '',
+      extensions: [
+        StarterKit,
+      ],
+      editorProps: {
+        attributes: {
+          class: "prose my-6 mx-auto focus:outline-none"
+        }
+      }
+    })
+  },
+
+  beforeUnmount() {
+    this.editor.destroy()
+  },
+
+  methods: {
+    async getDatabase() {
+      return new Promise((resolve, reject) => {
+        const db = window.indexedDB.open('notes', 2);
+
+        db.onerror = e => {
+          reject('Error opening the database');
+        }
+        db.onsuccess = e => {
+          console.log('db.onsuccess', e);
+          resolve(e.target.result);
+        }
+        db.onupgradeneeded = e => {
+          console.log('db.onupgradeneeded', e);
+          e.target.result.deleteObjectStore('notes');
+          e.target.result.createObjectStore('notes', {keyPath: 'created' });
+        }
+      })
+    },
+
+    async saveNote() {
+      return new Promise((resolve, reject) => {
+        const transaction = this.database.transaction('notes', 'readwrite');
+        transaction.oncomplete = e => {
+          resolve();
+        }
+
+        const now = new Date();
+        const note = {
+          content: this.editor.getHTML(),
+          created: now.getTime()
+        }
+
+        this.notes.unshift(note);
+
+        transaction.objectStore('notes').add(note);
+        
+      })
+      
+    },
+
+    async getNotes() {
+      return new Promise((resolve, reject) => {
+        this.database.transaction('notes')
+          .objectStore('notes')
+          .getAll()
+          .onsuccess = e => {
+            console.log('getNotes()', e.target.result);
+            resolve(e.target.result);
+          }
+        
+      })
+    },
   }
+  
 }
 </script>
 
-<style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
+<style scoped lang="postcss">
+button {
+  @apply bg-none border border-gray-900 rounded py-1 px-4 mr-4 mt-3 hover:bg-gray-900 hover:text-white;
 }
 </style>
